@@ -397,3 +397,106 @@ describe("GET /api/politiques/:slug (factchecksCount)", () => {
     assertNumber(data.factchecksCount, "factchecksCount");
   });
 });
+
+// ─── Parties ──────────────────────────────────────────────────
+
+describe("GET /api/partis", () => {
+  it("returns paginated list with expected fields", async () => {
+    const data = await fetchJSON<Record<string, unknown>>("/api/partis?limit=2");
+
+    assert.ok(Array.isArray(data.data), "data should be an array");
+    assert.ok(typeof data.pagination === "object" && data.pagination !== null);
+    assertPagination(data.pagination as Record<string, unknown>);
+
+    const items = data.data as Record<string, unknown>[];
+    assert.ok(items.length > 0, "should return at least 1 party");
+
+    const p = items[0];
+    assertString(p.id, "id");
+    assertString(p.slug, "slug");
+    assertString(p.name, "name");
+    assertString(p.shortName, "shortName");
+    assertString(p.color, "color");
+    assertNumber(p.memberCount, "memberCount");
+  });
+
+  it("search filter works", async () => {
+    const data = await fetchJSON<Record<string, unknown>>("/api/partis?search=Renaissance&limit=5");
+    const items = data.data as Record<string, unknown>[];
+    assert.ok(items.length > 0, "search for 'Renaissance' should return results");
+  });
+});
+
+describe("GET /api/partis/:slug", () => {
+  it("returns full party detail with members", async () => {
+    const data = await fetchJSON<Record<string, unknown>>("/api/partis/renaissance");
+
+    assertString(data.id, "id");
+    assertString(data.slug, "slug");
+    assertString(data.name, "name");
+    assertString(data.shortName, "shortName");
+    assertString(data.color, "color");
+    assertNumber(data.memberCount, "memberCount");
+
+    // Members
+    assert.ok(Array.isArray(data.members), "members should be an array");
+    const members = data.members as Record<string, unknown>[];
+    if (members.length > 0) {
+      const m = members[0];
+      assertString(m.id, "member.id");
+      assertString(m.slug, "member.slug");
+      assertString(m.fullName, "member.fullName");
+      assertNumber(m.affairsCount, "member.affairsCount");
+    }
+
+    // External IDs
+    assert.ok(Array.isArray(data.externalIds), "externalIds should be an array");
+  });
+});
+
+// ─── Elections ────────────────────────────────────────────────
+
+describe("GET /api/elections", () => {
+  it("returns paginated list with expected fields", async () => {
+    const data = await fetchJSON<Record<string, unknown>>("/api/elections?limit=2");
+
+    assert.ok(Array.isArray(data.data), "data should be an array");
+    assert.ok(typeof data.pagination === "object" && data.pagination !== null);
+    assertPagination(data.pagination as Record<string, unknown>);
+
+    const items = data.data as Record<string, unknown>[];
+    if (items.length > 0) {
+      const e = items[0];
+      assertString(e.id, "id");
+      assertString(e.slug, "slug");
+      assertString(e.type, "type");
+      assertString(e.title, "title");
+      assertString(e.status, "status");
+      assertNumber(e.candidacyCount, "candidacyCount");
+    }
+  });
+});
+
+describe("GET /api/elections/:slug", () => {
+  it("returns election detail with candidacies and rounds", async () => {
+    // First get an election slug from the list
+    const list = await fetchJSON<Record<string, unknown>>("/api/elections?limit=1");
+    const items = list.data as Record<string, unknown>[];
+    if (items.length === 0) return; // No elections in DB yet, skip
+
+    const slug = items[0].slug as string;
+    const data = await fetchJSON<Record<string, unknown>>(`/api/elections/${slug}`);
+
+    assertString(data.id, "id");
+    assertString(data.slug, "slug");
+    assertString(data.type, "type");
+    assertString(data.title, "title");
+    assertString(data.status, "status");
+
+    // Candidacies
+    assert.ok(Array.isArray(data.candidacies), "candidacies should be an array");
+
+    // Rounds
+    assert.ok(Array.isArray(data.rounds), "rounds should be an array");
+  });
+});
