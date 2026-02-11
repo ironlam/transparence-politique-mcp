@@ -1,5 +1,24 @@
 const BASE_URL = "https://politic-tracker.vercel.app";
 
+/**
+ * Format an ISO date string to a readable French date (ex: "21 décembre 1977").
+ * Returns "—" for null/undefined/empty values.
+ */
+export function formatDate(isoDate: string | null | undefined): string {
+  if (!isoDate) return "—";
+  try {
+    const date = new Date(isoDate);
+    if (isNaN(date.getTime())) return isoDate;
+    return date.toLocaleDateString("fr-FR", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  } catch {
+    return isoDate;
+  }
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,

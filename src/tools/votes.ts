@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { fetchAPI } from "../api.js";
+import { fetchAPI, formatDate } from "../api.js";
 
 interface ScrutinListItem {
   id: string;
@@ -29,35 +29,43 @@ interface VoteListResponse {
 interface PartyStats {
   partyId: string;
   partyName: string;
-  shortName: string;
-  color: string;
-  memberCount: number;
-  cohesion: number;
-  unanimousVotes: number;
+  partyShortName: string;
+  partyColor: string;
+  partySlug: string;
   totalVotes: number;
+  pour: number;
+  contre: number;
+  abstention: number;
+  nonVotant: number;
+  absent: number;
+  cohesionRate: number;
+  participationRate: number;
 }
 
 interface DivisiveScrutin {
   id: string;
+  slug: string;
   title: string;
   votingDate: string;
-  legislature: number;
+  chamber: string;
   votesFor: number;
   votesAgainst: number;
   votesAbstain: number;
-  result: string;
-  divisivityScore: number;
+  divisionScore: number;
 }
 
 interface VoteStatsResponse {
   parties: PartyStats[];
   divisiveScrutins: DivisiveScrutin[];
   global: {
+    totalScrutins: number;
     totalVotes: number;
     totalVotesFor: number;
     totalVotesAgainst: number;
     totalVotesAbstain: number;
-    averageCohesion: number;
+    participationRate: number;
+    adoptes: number;
+    rejetes: number;
   };
 }
 
@@ -149,7 +157,7 @@ export function registerVoteTools(server: McpServer): void {
 
       for (const s of data.data) {
         const resultLabel = formatResult(s.result);
-        lines.push(`- **${s.title}** (${s.votingDate})`);
+        lines.push(`- **${s.title}** (${formatDate(s.votingDate)})`);
         lines.push(`  ${resultLabel} — Pour: ${s.votesFor}, Contre: ${s.votesAgainst}, Abstention: ${s.votesAbstain}`);
       }
 
@@ -194,7 +202,7 @@ export function registerVoteTools(server: McpServer): void {
       lines.push(`## Derniers votes (page ${data.pagination.page}/${data.pagination.totalPages})`);
       for (const v of data.votes) {
         const resultLabel = formatResult(v.scrutin.result);
-        lines.push(`- **${v.scrutin.title}** (${v.scrutin.votingDate})`);
+        lines.push(`- **${v.scrutin.title}** (${formatDate(v.scrutin.votingDate)})`);
         lines.push(`  Vote : ${formatPosition(v.position)} — Résultat : ${resultLabel}`);
       }
 
@@ -224,26 +232,27 @@ export function registerVoteTools(server: McpServer): void {
       lines.push("");
 
       lines.push("## Vue globale");
-      lines.push(`- **Total des votes** : ${data.global.totalVotes}`);
+      lines.push(`- **Total scrutins** : ${data.global.totalScrutins}`);
+      lines.push(`- **Total votes** : ${data.global.totalVotes}`);
       lines.push(`- Pour : ${data.global.totalVotesFor}`);
       lines.push(`- Contre : ${data.global.totalVotesAgainst}`);
       lines.push(`- Abstention : ${data.global.totalVotesAbstain}`);
-      lines.push(`- **Cohésion moyenne** : ${(data.global.averageCohesion * 100).toFixed(1)}%`);
+      lines.push(`- **Adoptés** : ${data.global.adoptes} — **Rejetés** : ${data.global.rejetes}`);
+      lines.push(`- **Taux de participation** : ${data.global.participationRate}%`);
       lines.push("");
 
       lines.push("## Cohésion par parti");
-      const sorted = [...data.parties].sort((a, b) => b.cohesion - a.cohesion);
+      const sorted = [...data.parties].sort((a, b) => b.cohesionRate - a.cohesionRate);
       for (const p of sorted) {
-        lines.push(`- **${p.shortName}** : ${(p.cohesion * 100).toFixed(1)}% de cohésion (${p.memberCount} membres, ${p.totalVotes} votes)`);
+        lines.push(`- **${p.partyShortName}** (${p.partyName}) : ${p.cohesionRate}% de cohésion (${p.totalVotes} votes)`);
       }
       lines.push("");
 
       if (data.divisiveScrutins.length > 0) {
         lines.push("## Scrutins les plus divisifs");
         for (const s of data.divisiveScrutins.slice(0, 10)) {
-          const resultLabel = formatResult(s.result);
-          lines.push(`- **${s.title}** (${s.votingDate})`);
-          lines.push(`  ${resultLabel} — Score de divisivité : ${(s.divisivityScore * 100).toFixed(1)}%`);
+          lines.push(`- **${s.title}** (${formatDate(s.votingDate)})`);
+          lines.push(`  Pour: ${s.votesFor}, Contre: ${s.votesAgainst}, Abstention: ${s.votesAbstain} — Score de division : ${s.divisionScore}%`);
         }
       }
 

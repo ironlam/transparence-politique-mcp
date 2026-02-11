@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { fetchAPI } from "../api.js";
+import { fetchAPI, formatDate } from "../api.js";
 
 interface PoliticianListItem {
   id: string;
@@ -89,9 +89,10 @@ function formatPoliticianDetail(p: PoliticianDetail): string {
   if (p.currentParty) {
     lines.push(`**Parti** : ${p.currentParty.name} (${p.currentParty.shortName})`);
   }
-  lines.push(`**${p.civility === "M." ? "Né" : "Née"}** : ${p.birthDate} à ${p.birthPlace}`);
+  const bornLabel = p.civility === "Mme" ? "Née" : "Né";
+  lines.push(`**${bornLabel}** le ${formatDate(p.birthDate)} à ${p.birthPlace}`);
   if (p.deathDate) {
-    lines.push(`**Décédé(e)** : ${p.deathDate}`);
+    lines.push(`**Décédé(e)** le ${formatDate(p.deathDate)}`);
   }
 
   if (p.mandates.length > 0) {
@@ -104,14 +105,14 @@ function formatPoliticianDetail(p: PoliticianDetail): string {
       lines.push("### En cours");
       for (const m of current) {
         const constituency = m.constituency ? ` — ${m.constituency}` : "";
-        lines.push(`- ${formatMandateType(m.type)} : ${m.title}${constituency} (depuis ${m.startDate})`);
+        lines.push(`- ${formatMandateType(m.type)} : ${m.title}${constituency} (depuis ${formatDate(m.startDate)})`);
       }
     }
     if (past.length > 0) {
       lines.push("### Anciens mandats");
       for (const m of past) {
         const constituency = m.constituency ? ` — ${m.constituency}` : "";
-        lines.push(`- ${formatMandateType(m.type)} : ${m.title}${constituency} (${m.startDate} → ${m.endDate})`);
+        lines.push(`- ${formatMandateType(m.type)} : ${m.title}${constituency} (${formatDate(m.startDate)} → ${formatDate(m.endDate)})`);
       }
     }
   }

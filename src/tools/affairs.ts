@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { fetchAPI } from "../api.js";
+import { fetchAPI, formatDate } from "../api.js";
 
 interface Source {
   id: string;
@@ -144,9 +144,9 @@ function formatAffairDetail(affair: AffairListItem | PoliticianAffairsResponse["
   lines.push(`**Statut** : ${formatStatus(affair.status)}`);
   lines.push(`**Catégorie** : ${formatCategory(affair.category)}`);
 
-  if (affair.factsDate) lines.push(`**Date des faits** : ${affair.factsDate}`);
-  lines.push(`**Début de procédure** : ${affair.startDate}`);
-  if (affair.verdictDate) lines.push(`**Verdict** : ${affair.verdictDate}`);
+  if (affair.factsDate) lines.push(`**Date des faits** : ${formatDate(affair.factsDate)}`);
+  if (affair.startDate) lines.push(`**Début de procédure** : ${formatDate(affair.startDate)}`);
+  if (affair.verdictDate) lines.push(`**Verdict** : ${formatDate(affair.verdictDate)}`);
   if (affair.sentence) lines.push(`**Peine** : ${affair.sentence}`);
   if (affair.appeal) lines.push(`**Appel** : ${affair.appeal}`);
 
@@ -161,7 +161,7 @@ function formatAffairDetail(affair: AffairListItem | PoliticianAffairsResponse["
     lines.push("");
     lines.push("**Sources** :");
     for (const s of affair.sources) {
-      const date = s.publishedAt ? ` (${s.publishedAt})` : "";
+      const date = s.publishedAt ? ` (${formatDate(s.publishedAt)})` : "";
       lines.push(`- [${s.title}](${s.url}) — ${s.publisher}${date}`);
     }
   }
