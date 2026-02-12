@@ -270,7 +270,7 @@ export function registerAffairTools(server: McpServer): void {
         lines.push("");
       }
 
-      lines.push(`🔗 https://politic-tracker.vercel.app/politiques/${data.politician.slug}`);
+      lines.push(`🔗 https://poligraph.fr/politiques/${data.politician.slug}`);
 
       return { content: [{ type: "text" as const, text: lines.join("\n") }] };
     },

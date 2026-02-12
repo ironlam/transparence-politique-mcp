@@ -193,7 +193,7 @@ export function registerFactCheckTools(server: McpServer): void {
         lines.push(`_Page suivante : page=${data.pagination.page + 1}_`);
       }
 
-      lines.push(`🔗 https://politic-tracker.vercel.app/politiques/${data.politician.slug}`);
+      lines.push(`🔗 https://poligraph.fr/politiques/${data.politician.slug}`);
 
       return { content: [{ type: "text" as const, text: lines.join("\n") }] };
     },

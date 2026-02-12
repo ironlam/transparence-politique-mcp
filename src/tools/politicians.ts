@@ -139,9 +139,48 @@ function formatPoliticianDetail(p: PoliticianDetail): string {
   }
 
   lines.push("");
-  lines.push(`🔗 https://politic-tracker.vercel.app/politiques/${p.slug}`);
+  lines.push(`🔗 https://poligraph.fr/politiques/${p.slug}`);
 
   return lines.join("\n");
+}
+
+interface RelationNode {
+  id: string;
+  slug: string;
+  fullName: string;
+  photoUrl: string | null;
+  party: { shortName: string; color: string | null } | null;
+  mandateType: string | null;
+}
+
+interface RelationLink {
+  source: string;
+  target: string;
+  type: string;
+  strength: number;
+  label?: string;
+}
+
+interface RelationsResponse {
+  center: RelationNode;
+  nodes: RelationNode[];
+  links: RelationLink[];
+  stats: {
+    totalConnections: number;
+    byType: Record<string, number>;
+  };
+}
+
+function formatRelationType(type: string): string {
+  const labels: Record<string, string> = {
+    SAME_PARTY: "Même parti",
+    SAME_GOVERNMENT: "Même gouvernement",
+    SAME_LEGISLATURE: "Même législature",
+    SAME_CONSTITUENCY: "Même département",
+    SAME_EUROPEAN_GROUP: "Même groupe européen",
+    PARTY_HISTORY: "Ancien même parti",
+  };
+  return labels[type] || type;
 }
 
 export function registerPoliticianTools(server: McpServer): void {
@@ -195,6 +234,59 @@ export function registerPoliticianTools(server: McpServer): void {
         lines.push("");
         lines.push(`_Page suivante : page=${data.pagination.page + 1}_`);
       }
+
+      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+    },
+  );
+
+  server.tool(
+    "get_politician_relations",
+    "Obtenir les relations d'un politicien : même parti, gouvernement, législature, département, groupe européen.",
+    {
+      slug: z.string().describe("Identifiant du politicien (ex: 'emmanuel-macron')"),
+      types: z
+        .string()
+        .optional()
+        .describe("Types de relations séparés par virgule (ex: 'SAME_PARTY,SAME_GOVERNMENT'). Types : SAME_PARTY, SAME_GOVERNMENT, SAME_LEGISLATURE, SAME_CONSTITUENCY, SAME_EUROPEAN_GROUP, PARTY_HISTORY"),
+      limit: z.number().int().min(1).max(50).default(10).describe("Nombre max de connexions par type (max 50)"),
+    },
+    async ({ slug, types, limit }) => {
+      const data = await fetchAPI<RelationsResponse>(
+        `/api/politiques/${encodeURIComponent(slug)}/relations`,
+        { types, limit },
+      );
+
+      const lines: string[] = [];
+      const party = data.center.party ? ` (${data.center.party.shortName})` : "";
+      lines.push(`# Relations — ${data.center.fullName}${party}`);
+      lines.push(`**${data.stats.totalConnections} connexions**`);
+      lines.push("");
+
+      // Group by relation type
+      const byType = new Map<string, RelationNode[]>();
+      for (const link of data.links) {
+        const node = data.nodes.find((n) => n.id === link.target);
+        if (!node) continue;
+        const existing = byType.get(link.type) || [];
+        existing.push(node);
+        byType.set(link.type, existing);
+      }
+
+      for (const [type, nodes] of byType) {
+        const count = data.stats.byType[type] || nodes.length;
+        lines.push(`## ${formatRelationType(type)} (${count})`);
+        for (const n of nodes.slice(0, 15)) {
+          const nParty = n.party ? ` (${n.party.shortName})` : "";
+          const mandate = n.mandateType ? ` — ${formatMandateType(n.mandateType)}` : "";
+          lines.push(`- **${n.fullName}**${nParty}${mandate}`);
+        }
+        if (nodes.length > 15) {
+          lines.push(`_... et ${nodes.length - 15} autres_`);
+        }
+        lines.push("");
+      }
+
+      lines.push(`🔗 https://poligraph.fr/politiques/${data.center.slug}/relations`);
 
       return { content: [{ type: "text" as const, text: lines.join("\n") }] };
     },

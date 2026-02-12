@@ -1,6 +1,6 @@
-# Transparence Politique MCP Server
+# Poligraph MCP Server
 
-Serveur [MCP](https://modelcontextprotocol.io/) (Model Context Protocol) qui expose les données de [Transparence Politique](https://politic-tracker.vercel.app/) comme tools pour Claude Desktop et Claude Code.
+Serveur [MCP](https://modelcontextprotocol.io/) (Model Context Protocol) qui expose les données de [Poligraph](https://poligraph.fr/) comme tools pour Claude Desktop et Claude Code.
 
 Permet aux journalistes, chercheurs et citoyens de requêter les données politiques françaises en langage naturel.
 
@@ -20,7 +20,7 @@ Ajoutez dans votre fichier `claude_desktop_config.json` :
 ```json
 {
   "mcpServers": {
-    "transparence-politique": {
+    "poligraph": {
       "command": "node",
       "args": ["/chemin/absolu/vers/transparence-politique-mcp/build/index.js"]
     }
@@ -40,7 +40,7 @@ Ajoutez dans `.claude/settings.json` :
 ```json
 {
   "mcpServers": {
-    "transparence-politique": {
+    "poligraph": {
       "command": "node",
       "args": ["/chemin/absolu/vers/transparence-politique-mcp/build/index.js"]
     }
@@ -48,70 +48,79 @@ Ajoutez dans `.claude/settings.json` :
 }
 ```
 
-## Tools disponibles
+## Tools disponibles (18)
 
-### `search_politicians`
+### Politiciens
+
+#### `search_politicians`
 Rechercher des politiciens par nom, parti ou type de mandat.
 
-```
-Qui sont les députés du Rassemblement National ?
-Liste les sénateurs ayant des affaires judiciaires
-```
-
-### `get_politician`
+#### `get_politician`
 Fiche complète d'un politicien : mandats, déclarations de patrimoine, affaires.
 
-```
-Donne-moi la fiche d'Emmanuel Macron
-Quels mandats a exercé Marine Le Pen ?
-```
+#### `get_politician_relations`
+Relations d'un politicien : même parti, gouvernement, législature, département, groupe européen.
 
-### `get_politician_affairs`
-Affaires judiciaires d'un politicien avec sources et détails.
+### Affaires judiciaires
 
-```
-Quelles sont les affaires de Nicolas Sarkozy ?
-```
-
-### `get_politician_votes`
-Votes d'un parlementaire avec statistiques de participation.
-
-```
-Comment vote Jean-Luc Mélenchon ?
-Quel est le taux de participation de ce député ?
-```
-
-### `list_affairs`
+#### `list_affairs`
 Liste des affaires judiciaires avec filtres (statut, catégorie).
 
-```
-Quelles affaires de corruption sont en cours ?
-Liste les condamnations définitives
-```
+#### `get_politician_affairs`
+Affaires judiciaires d'un politicien avec sources et détails.
 
-### `list_votes`
+### Votes parlementaires
+
+#### `list_votes`
 Scrutins parlementaires (Assemblée nationale et Sénat).
 
-```
-Quels votes ont eu lieu sur l'immigration ?
-Liste les scrutins rejetés de la 17e législature
-```
+#### `get_politician_votes`
+Votes d'un parlementaire avec statistiques de participation.
 
-### `get_vote_stats`
+#### `get_vote_stats`
 Statistiques de vote par parti : cohésion, scrutins divisifs.
 
-```
-Quel parti est le plus cohérent dans ses votes ?
-Quels sont les scrutins les plus divisifs au Sénat ?
-```
+### Mandats
 
-### `search_advanced`
+#### `list_mandates`
+Liste des mandats politiques avec filtres (type, institution, statut actif/terminé).
+
+### Partis politiques
+
+#### `list_parties`
+Liste des partis politiques avec filtres (position, statut actif/dissous).
+
+#### `get_party`
+Fiche complète d'un parti : membres, filiation, position politique.
+
+### Fact-checks
+
+#### `list_factchecks`
+Fact-checks sur des politiciens français (AFP Factuel, Les Décodeurs, etc.).
+
+#### `get_politician_factchecks`
+Fact-checks mentionnant un politicien spécifique.
+
+### Élections
+
+#### `list_elections`
+Élections françaises avec filtres (type, statut, année).
+
+#### `get_election`
+Détail d'une élection : candidatures, résultats, participation.
+
+### Géographie
+
+#### `get_department_stats`
+Statistiques par département : nombre d'élus, parti dominant, répartition.
+
+#### `get_deputies_by_department`
+Députés en exercice dans un département donné.
+
+### Recherche
+
+#### `search_advanced`
 Recherche avancée avec filtres combinés (département, statut actif, etc.).
-
-```
-Quels sont les députés actifs de Paris ayant des affaires ?
-Trouve les ministres du parti socialiste
-```
 
 ## Développement
 
@@ -119,6 +128,7 @@ Trouve les ministres du parti socialiste
 npm run dev          # Compilation en mode watch
 npm run build        # Build production
 npm run inspect      # Tester interactivement avec MCP Inspector
+npm run test:build   # Build + tests de contrat API
 ```
 
 ## Source des données
@@ -129,7 +139,7 @@ Toutes les données proviennent de sources officielles :
 - [HATVP](https://www.hatvp.fr/)
 - [Wikidata](https://www.wikidata.org/)
 
-Voir [politic-tracker.vercel.app/sources](https://politic-tracker.vercel.app/sources) pour la liste complète.
+Voir [poligraph.fr/sources](https://poligraph.fr/sources) pour la liste complète.
 
 ## Licence
 

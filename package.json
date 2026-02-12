@@ -1,10 +1,10 @@
 {
-  "name": "transparence-politique-mcp",
-  "version": "1.0.0",
-  "description": "Serveur MCP pour accéder aux données de Transparence Politique en langage naturel",
+  "name": "poligraph-mcp",
+  "version": "2.0.0",
+  "description": "Serveur MCP pour accéder aux données de Poligraph — observatoire citoyen de la vie politique",
   "type": "module",
   "bin": {
-    "transparence-politique-mcp": "build/index.js"
+    "poligraph-mcp": "build/index.js"
   },
   "scripts": {
     "build": "tsc",
@@ -16,7 +16,7 @@
   },
   "keywords": [
     "mcp",
-    "transparence",
+    "poligraph",
     "politique",
     "france",
     "claude"

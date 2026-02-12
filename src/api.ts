@@ -1,4 +1,4 @@
-const BASE_URL = "https://politic-tracker.vercel.app";
+const BASE_URL = "https://poligraph.fr";
 
 /**
  * Format an ISO date string to a readable French date (ex: "21 décembre 1977").
@@ -46,7 +46,7 @@ export async function fetchAPI<T>(
   const response = await fetch(url.toString(), {
     headers: {
       Accept: "application/json",
-      "User-Agent": "transparence-politique-mcp/1.0",
+      "User-Agent": "poligraph-mcp/1.0",
     },
   });
 

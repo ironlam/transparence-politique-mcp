@@ -9,10 +9,12 @@ import { registerLegislationTools } from "./tools/legislation.js";
 import { registerFactCheckTools } from "./tools/factchecks.js";
 import { registerPartyTools } from "./tools/parties.js";
 import { registerElectionTools } from "./tools/elections.js";
+import { registerMandateTools } from "./tools/mandates.js";
+import { registerDepartmentTools } from "./tools/departments.js";
 
 const server = new McpServer({
-  name: "transparence-politique",
-  version: "1.0.0",
+  name: "poligraph",
+  version: "2.0.0",
 });
 
 // Register all tools
@@ -23,9 +25,11 @@ registerLegislationTools(server);
 registerFactCheckTools(server);
 registerPartyTools(server);
 registerElectionTools(server);
+registerMandateTools(server);
+registerDepartmentTools(server);
 
 // Connect via stdio transport
 const transport = new StdioServerTransport();
 await server.connect(transport);
 
-console.error("Transparence Politique MCP server running on stdio");
+console.error("Poligraph MCP server running on stdio");
