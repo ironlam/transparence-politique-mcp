@@ -54,35 +54,42 @@ function formatMandateType(type: string): string {
 }
 
 export function registerMandateTools(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     "list_mandates",
-    "Lister les mandats politiques avec filtres par type, institution, statut actif/terminé et politicien.",
     {
-      type: z
-        .enum([
-          "DEPUTE",
-          "SENATEUR",
-          "DEPUTE_EUROPEEN",
-          "PRESIDENT_REPUBLIQUE",
-          "PREMIER_MINISTRE",
-          "MINISTRE",
-          "SECRETAIRE_ETAT",
-          "MINISTRE_DELEGUE",
-          "PRESIDENT_REGION",
-          "PRESIDENT_DEPARTEMENT",
-          "MAIRE",
-          "ADJOINT_MAIRE",
-          "CONSEILLER_REGIONAL",
-          "CONSEILLER_DEPARTEMENTAL",
-          "CONSEILLER_MUNICIPAL",
-          "PRESIDENT_PARTI",
-        ])
-        .optional()
-        .describe("Filtrer par type de mandat"),
-      isCurrent: z.boolean().optional().describe("true = mandats en cours, false = mandats terminés"),
-      institution: z.string().optional().describe("Recherche sur l'institution (ex: 'Assemblée', 'Sénat')"),
-      page: z.number().int().min(1).default(1).describe("Numéro de page"),
-      limit: z.number().int().min(1).max(100).default(20).describe("Résultats par page (max 100)"),
+      description: "Lister les mandats politiques avec filtres par type, institution, statut actif/terminé et politicien.",
+      inputSchema: {
+        type: z
+          .enum([
+            "DEPUTE",
+            "SENATEUR",
+            "DEPUTE_EUROPEEN",
+            "PRESIDENT_REPUBLIQUE",
+            "PREMIER_MINISTRE",
+            "MINISTRE",
+            "SECRETAIRE_ETAT",
+            "MINISTRE_DELEGUE",
+            "PRESIDENT_REGION",
+            "PRESIDENT_DEPARTEMENT",
+            "MAIRE",
+            "ADJOINT_MAIRE",
+            "CONSEILLER_REGIONAL",
+            "CONSEILLER_DEPARTEMENTAL",
+            "CONSEILLER_MUNICIPAL",
+            "PRESIDENT_PARTI",
+          ])
+          .optional()
+          .describe("Filtrer par type de mandat"),
+        isCurrent: z.boolean().optional().describe("true = mandats en cours, false = mandats terminés"),
+        institution: z.string().optional().describe("Recherche sur l'institution (ex: 'Assemblée', 'Sénat')"),
+        page: z.number().int().min(1).default(1).describe("Numéro de page"),
+        limit: z.number().int().min(1).max(100).default(20).describe("Résultats par page (max 100)"),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      _meta: {
+        "openai/toolInvocation/invoking": "Recherche de mandats...",
+        "openai/toolInvocation/invoked": "Mandats trouvés",
+      },
     },
     async ({ type, isCurrent, institution, page, limit }) => {
       const data = await fetchAPI<MandateListResponse>("/api/mandats", {
@@ -113,7 +120,28 @@ export function registerMandateTools(server: McpServer): void {
         lines.push(`_Page suivante : page=${data.pagination.page + 1}_`);
       }
 
-      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+      return {
+        content: [{ type: "text" as const, text: lines.join("\n") }],
+        structuredContent: {
+          total: data.pagination.total,
+          page: data.pagination.page,
+          totalPages: data.pagination.totalPages,
+          items: data.data.map((m) => ({
+            type: m.type,
+            title: m.title,
+            institution: m.institution,
+            constituency: m.constituency,
+            startDate: m.startDate,
+            endDate: m.endDate,
+            isCurrent: m.isCurrent,
+            politician: {
+              slug: m.politician.slug,
+              fullName: m.politician.fullName,
+              url: `https://poligraph.fr/politiques/${m.politician.slug}`,
+            },
+          })),
+        },
+      };
     },
   );
 }

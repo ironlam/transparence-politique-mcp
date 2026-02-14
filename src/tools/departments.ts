@@ -46,15 +46,22 @@ interface DeputyItem {
 }
 
 export function registerDepartmentTools(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     "get_department_stats",
-    "Statistiques politiques par département : nombre d'élus, parti dominant, répartition des partis.",
     {
-      filter: z
-        .enum(["all", "deputes", "senateurs"])
-        .optional()
-        .default("all")
-        .describe("Filtrer par type : all (députés + sénateurs), deputes, senateurs"),
+      description: "Statistiques politiques par département : nombre d'élus, parti dominant, répartition des partis.",
+      inputSchema: {
+        filter: z
+          .enum(["all", "deputes", "senateurs"])
+          .optional()
+          .default("all")
+          .describe("Filtrer par type : all (députés + sénateurs), députés, sénateurs"),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      _meta: {
+        "openai/toolInvocation/invoking": "Calcul des statistiques par département...",
+        "openai/toolInvocation/invoked": "Statistiques calculées",
+      },
     },
     async ({ filter }) => {
       const data = await fetchAPI<DepartmentStatsResponse>("/api/stats/departments", {
@@ -95,17 +102,45 @@ export function registerDepartmentTools(server: McpServer): void {
       }
 
       lines.push("");
-      lines.push(`🔗 https://poligraph.fr/carte`);
+      lines.push(`https://poligraph.fr/carte`);
 
-      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+      const partyDominanceObj: Record<string, number> = {};
+      for (const [party, count] of partyDominance) {
+        partyDominanceObj[party] = count;
+      }
+
+      return {
+        content: [{ type: "text" as const, text: lines.join("\n") }],
+        structuredContent: {
+          stats: data.stats,
+          topDepartments: sorted.slice(0, 10).map((d) => ({
+            code: d.code,
+            name: d.name,
+            region: d.region,
+            totalElus: d.totalElus,
+            deputes: d.deputes,
+            senateurs: d.senateurs,
+            dominantParty: d.dominantParty ? { shortName: d.dominantParty.shortName, count: d.dominantParty.count } : null,
+          })),
+          partyDominance: partyDominanceObj,
+          url: "https://poligraph.fr/carte",
+        },
+      };
     },
   );
 
-  server.tool(
+  server.registerTool(
     "get_deputies_by_department",
-    "Obtenir la liste des députés en exercice dans un département donné.",
     {
-      department: z.string().describe("Nom du département (ex: 'Paris', 'Bouches-du-Rhône', 'Nord')"),
+      description: "Obtenir la liste des députés en exercice dans un département donné.",
+      inputSchema: {
+        department: z.string().describe("Nom du département (ex: 'Paris', 'Bouches-du-Rhône', 'Nord')"),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      _meta: {
+        "openai/toolInvocation/invoking": "Recherche des députés...",
+        "openai/toolInvocation/invoked": "Députés trouvés",
+      },
     },
     async ({ department }) => {
       const data = await fetchAPI<DeputyItem[]>("/api/deputies/by-department", {
@@ -128,7 +163,20 @@ export function registerDepartmentTools(server: McpServer): void {
         lines.push("_Aucun député trouvé pour ce département. Vérifiez l'orthographe (ex: 'Bouches-du-Rhône', pas 'Bouches du Rhône')._");
       }
 
-      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+      return {
+        content: [{ type: "text" as const, text: lines.join("\n") }],
+        structuredContent: {
+          department,
+          count: data.length,
+          deputies: data.map((d) => ({
+            slug: d.slug,
+            fullName: d.fullName,
+            party: d.party ? { name: d.party.name, shortName: d.party.shortName } : null,
+            constituency: d.constituency,
+            url: `https://poligraph.fr/politiques/${d.slug}`,
+          })),
+        },
+      };
     },
   );
 }

@@ -88,18 +88,25 @@ function formatMandateType(type: string): string {
 }
 
 export function registerPartyTools(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     "list_parties",
-    "Lister les partis politiques français avec filtres par position politique et statut.",
     {
-      search: z.string().optional().describe("Recherche par nom ou abréviation (ex: 'LFI', 'Républicains')"),
-      position: z
-        .enum(["FAR_LEFT", "LEFT", "CENTER_LEFT", "CENTER", "CENTER_RIGHT", "RIGHT", "FAR_RIGHT"])
-        .optional()
-        .describe("Filtrer par position sur l'échiquier politique"),
-      active: z.boolean().optional().describe("true = partis actifs (non dissous avec des membres), false = partis dissous"),
-      page: z.number().int().min(1).default(1).describe("Numéro de page"),
-      limit: z.number().int().min(1).max(100).default(20).describe("Résultats par page (max 100)"),
+      description: "Lister les partis politiques français avec filtres par position politique et statut.",
+      inputSchema: {
+        search: z.string().optional().describe("Recherche par nom ou abréviation (ex: 'LFI', 'Républicains')"),
+        position: z
+          .enum(["FAR_LEFT", "LEFT", "CENTER_LEFT", "CENTER", "CENTER_RIGHT", "RIGHT", "FAR_RIGHT"])
+          .optional()
+          .describe("Filtrer par position sur l'échiquier politique"),
+        active: z.boolean().optional().describe("true = partis actifs (non dissous avec des membres), false = partis dissous"),
+        page: z.number().int().min(1).default(1).describe("Numéro de page"),
+        limit: z.number().int().min(1).max(100).default(20).describe("Résultats par page (max 100)"),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      _meta: {
+        "openai/toolInvocation/invoking": "Recherche de partis politiques...",
+        "openai/toolInvocation/invoked": "Partis trouvés",
+      },
     },
     async ({ search, position, active, page, limit }) => {
       const data = await fetchAPI<PartyListResponse>("/api/partis", {
@@ -126,15 +133,38 @@ export function registerPartyTools(server: McpServer): void {
         lines.push(`_Page suivante : page=${data.pagination.page + 1}_`);
       }
 
-      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+      return {
+        content: [{ type: "text" as const, text: lines.join("\n") }],
+        structuredContent: {
+          total: data.pagination.total,
+          page: data.pagination.page,
+          totalPages: data.pagination.totalPages,
+          items: data.data.map((p) => ({
+            slug: p.slug,
+            name: p.name,
+            shortName: p.shortName,
+            politicalPosition: p.politicalPosition,
+            memberCount: p.memberCount,
+            dissolvedDate: p.dissolvedDate,
+            url: `https://poligraph.fr/partis/${p.slug}`,
+          })),
+        },
+      };
     },
   );
 
-  server.tool(
+  server.registerTool(
     "get_party",
-    "Obtenir la fiche complète d'un parti politique : membres, position, filiation, liens externes.",
     {
-      slug: z.string().describe("Identifiant du parti (ex: 'renaissance', 'rassemblement-national', 'la-france-insoumise')"),
+      description: "Obtenir la fiche complète d'un parti politique : membres, position, filiation, liens externes.",
+      inputSchema: {
+        slug: z.string().describe("Identifiant du parti (ex: 'renaissance', 'rassemblement-national', 'la-france-insoumise')"),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      _meta: {
+        "openai/toolInvocation/invoking": "Chargement du parti...",
+        "openai/toolInvocation/invoked": "Parti chargé",
+      },
     },
     async ({ slug }) => {
       const data = await fetchAPI<PartyDetailResponse>(`/api/partis/${encodeURIComponent(slug)}`);
@@ -204,9 +234,27 @@ export function registerPartyTools(server: McpServer): void {
       }
 
       lines.push("");
-      lines.push(`🔗 https://politic-tracker.vercel.app/partis/${data.slug}`);
+      lines.push(`https://poligraph.fr/partis/${data.slug}`);
 
-      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+      return {
+        content: [{ type: "text" as const, text: lines.join("\n") }],
+        structuredContent: {
+          slug: data.slug,
+          name: data.name,
+          shortName: data.shortName,
+          politicalPosition: data.politicalPosition,
+          memberCount: data.memberCount,
+          foundedDate: data.foundedDate,
+          dissolvedDate: data.dissolvedDate,
+          website: data.website,
+          ideology: data.ideology,
+          description: data.description,
+          predecessor: data.predecessor ? { slug: data.predecessor.slug, name: data.predecessor.name, shortName: data.predecessor.shortName } : null,
+          successors: data.successors.map((s) => ({ slug: s.slug, name: s.name, shortName: s.shortName })),
+          membersWithMandate: data.members.filter((m) => m.currentMandate).length,
+          url: `https://poligraph.fr/partis/${data.slug}`,
+        },
+      };
     },
   );
 }

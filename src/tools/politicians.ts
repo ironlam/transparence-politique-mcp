@@ -139,7 +139,7 @@ function formatPoliticianDetail(p: PoliticianDetail): string {
   }
 
   lines.push("");
-  lines.push(`🔗 https://poligraph.fr/politiques/${p.slug}`);
+  lines.push(`https://poligraph.fr/politiques/${p.slug}`);
 
   return lines.join("\n");
 }
@@ -184,33 +184,40 @@ function formatRelationType(type: string): string {
 }
 
 export function registerPoliticianTools(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     "search_politicians",
-    "Rechercher des politiciens français par nom, parti ou type de mandat. Retourne une liste paginée.",
     {
-      query: z.string().optional().describe("Recherche par nom (ex: 'Macron', 'Marine')"),
-      party: z.string().optional().describe("Filtrer par ID de parti"),
-      mandateType: z
-        .enum([
-          "DEPUTE",
-          "SENATEUR",
-          "DEPUTE_EUROPEEN",
-          "PRESIDENT",
-          "PREMIER_MINISTRE",
-          "MINISTRE",
-          "SECRETAIRE_ETAT",
-          "MAIRE",
-          "PRESIDENT_REGION",
-          "PRESIDENT_DEPARTEMENT",
-          "CONSEILLER_REGIONAL",
-          "CONSEILLER_DEPARTEMENTAL",
-          "CONSEILLER_MUNICIPAL",
-        ])
-        .optional()
-        .describe("Filtrer par type de mandat"),
-      hasAffairs: z.boolean().optional().describe("Filtrer les politiciens ayant des affaires judiciaires"),
-      page: z.number().int().min(1).default(1).describe("Numéro de page"),
-      limit: z.number().int().min(1).max(100).default(20).describe("Résultats par page (max 100)"),
+      description: "Rechercher des politiciens français par nom, parti ou type de mandat. Retourne une liste paginée.",
+      inputSchema: {
+        query: z.string().optional().describe("Recherche par nom (ex: 'Macron', 'Marine')"),
+        party: z.string().optional().describe("Filtrer par ID de parti"),
+        mandateType: z
+          .enum([
+            "DEPUTE",
+            "SENATEUR",
+            "DEPUTE_EUROPEEN",
+            "PRESIDENT",
+            "PREMIER_MINISTRE",
+            "MINISTRE",
+            "SECRETAIRE_ETAT",
+            "MAIRE",
+            "PRESIDENT_REGION",
+            "PRESIDENT_DEPARTEMENT",
+            "CONSEILLER_REGIONAL",
+            "CONSEILLER_DEPARTEMENTAL",
+            "CONSEILLER_MUNICIPAL",
+          ])
+          .optional()
+          .describe("Filtrer par type de mandat"),
+        hasAffairs: z.boolean().optional().describe("Filtrer les politiciens ayant des affaires judiciaires"),
+        page: z.number().int().min(1).default(1).describe("Numéro de page"),
+        limit: z.number().int().min(1).max(100).default(20).describe("Résultats par page (max 100)"),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      _meta: {
+        "openai/toolInvocation/invoking": "Recherche de politiciens...",
+        "openai/toolInvocation/invoked": "Politiciens trouvés",
+      },
     },
     async ({ query, party, mandateType, hasAffairs, page, limit }) => {
       const data = await fetchAPI<PoliticianListResponse>("/api/politiques", {
@@ -235,20 +242,42 @@ export function registerPoliticianTools(server: McpServer): void {
         lines.push(`_Page suivante : page=${data.pagination.page + 1}_`);
       }
 
-      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+      return {
+        content: [{ type: "text" as const, text: lines.join("\n") }],
+        structuredContent: {
+          total: data.pagination.total,
+          page: data.pagination.page,
+          totalPages: data.pagination.totalPages,
+          items: data.data.map((p) => ({
+            slug: p.slug,
+            fullName: p.fullName,
+            party: p.currentParty ? { name: p.currentParty.name, shortName: p.currentParty.shortName } : null,
+            birthDate: p.birthDate,
+            deathDate: p.deathDate,
+            url: `https://poligraph.fr/politiques/${p.slug}`,
+          })),
+        },
+      };
     },
   );
 
-  server.tool(
+  server.registerTool(
     "get_politician_relations",
-    "Obtenir les relations d'un politicien : même parti, gouvernement, législature, département, groupe européen.",
     {
-      slug: z.string().describe("Identifiant du politicien (ex: 'emmanuel-macron')"),
-      types: z
-        .string()
-        .optional()
-        .describe("Types de relations séparés par virgule (ex: 'SAME_PARTY,SAME_GOVERNMENT'). Types : SAME_PARTY, SAME_GOVERNMENT, SAME_LEGISLATURE, SAME_CONSTITUENCY, SAME_EUROPEAN_GROUP, PARTY_HISTORY"),
-      limit: z.number().int().min(1).max(50).default(10).describe("Nombre max de connexions par type (max 50)"),
+      description: "Obtenir les relations d'un politicien : même parti, gouvernement, législature, département, groupe européen.",
+      inputSchema: {
+        slug: z.string().describe("Identifiant du politicien (ex: 'emmanuel-macron')"),
+        types: z
+          .string()
+          .optional()
+          .describe("Types de relations séparés par virgule (ex: 'SAME_PARTY,SAME_GOVERNMENT'). Types : SAME_PARTY, SAME_GOVERNMENT, SAME_LEGISLATURE, SAME_CONSTITUENCY, SAME_EUROPEAN_GROUP, PARTY_HISTORY"),
+        limit: z.number().int().min(1).max(50).default(10).describe("Nombre max de connexions par type (max 50)"),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      _meta: {
+        "openai/toolInvocation/invoking": "Chargement des relations...",
+        "openai/toolInvocation/invoked": "Relations chargées",
+      },
     },
     async ({ slug, types, limit }) => {
       const data = await fetchAPI<RelationsResponse>(
@@ -286,21 +315,71 @@ export function registerPoliticianTools(server: McpServer): void {
         lines.push("");
       }
 
-      lines.push(`🔗 https://poligraph.fr/politiques/${data.center.slug}/relations`);
+      lines.push(`https://poligraph.fr/politiques/${data.center.slug}/relations`);
 
-      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+      const relationsByType: Record<string, Array<{ slug: string; fullName: string; party: string | null }>> = {};
+      for (const [type, nodes] of byType) {
+        relationsByType[type] = nodes.map((n) => ({
+          slug: n.slug,
+          fullName: n.fullName,
+          party: n.party?.shortName ?? null,
+        }));
+      }
+
+      return {
+        content: [{ type: "text" as const, text: lines.join("\n") }],
+        structuredContent: {
+          center: { slug: data.center.slug, fullName: data.center.fullName },
+          totalConnections: data.stats.totalConnections,
+          byType: data.stats.byType,
+          relations: relationsByType,
+          url: `https://poligraph.fr/politiques/${data.center.slug}/relations`,
+        },
+      };
     },
   );
 
-  server.tool(
+  server.registerTool(
     "get_politician",
-    "Obtenir la fiche complète d'un politicien : mandats, déclarations de patrimoine, nombre d'affaires.",
     {
-      slug: z.string().describe("Identifiant du politicien (ex: 'emmanuel-macron', 'marine-le-pen')"),
+      description: "Obtenir la fiche complète d'un politicien : mandats, déclarations de patrimoine, nombre d'affaires.",
+      inputSchema: {
+        slug: z.string().describe("Identifiant du politicien (ex: 'emmanuel-macron', 'marine-le-pen')"),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      _meta: {
+        "openai/toolInvocation/invoking": "Chargement du politicien...",
+        "openai/toolInvocation/invoked": "Politicien chargé",
+      },
     },
     async ({ slug }) => {
       const data = await fetchAPI<PoliticianDetail>(`/api/politiques/${encodeURIComponent(slug)}`);
-      return { content: [{ type: "text" as const, text: formatPoliticianDetail(data) }] };
+      return {
+        content: [{ type: "text" as const, text: formatPoliticianDetail(data) }],
+        structuredContent: {
+          slug: data.slug,
+          fullName: data.fullName,
+          civility: data.civility,
+          birthDate: data.birthDate,
+          deathDate: data.deathDate,
+          birthPlace: data.birthPlace,
+          photoUrl: data.photoUrl,
+          party: data.currentParty ? { name: data.currentParty.name, shortName: data.currentParty.shortName } : null,
+          mandates: data.mandates.map((m) => ({
+            type: m.type,
+            title: m.title,
+            institution: m.institution,
+            constituency: m.constituency,
+            startDate: m.startDate,
+            endDate: m.endDate,
+            isCurrent: m.isCurrent,
+          })),
+          declarations: data.declarations.map((d) => ({ type: d.type, year: d.year, url: d.url })),
+          affairsCount: data.affairsCount,
+          factchecksCount: data.factchecksCount ?? 0,
+          url: `https://poligraph.fr/politiques/${data.slug}`,
+        },
+      };
     },
   );
 }

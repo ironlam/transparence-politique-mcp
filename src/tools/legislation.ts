@@ -44,29 +44,36 @@ function formatMandateType(type: string): string {
 }
 
 export function registerLegislationTools(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     "search_advanced",
-    "Recherche avancée de politiciens avec filtres combinés : parti, mandat, département, affaires, statut actif.",
     {
-      query: z.string().optional().describe("Recherche par nom ou prénom (min 2 caractères)"),
-      party: z.string().optional().describe("Filtrer par ID de parti"),
-      mandate: z
-        .enum([
-          "DEPUTE",
-          "SENATEUR",
-          "MINISTRE",
-          "PREMIER_MINISTRE",
-          "MINISTRE_DELEGUE",
-          "SECRETAIRE_ETAT",
-          "DEPUTE_EUROPEEN",
-        ])
-        .optional()
-        .describe("Filtrer par type de mandat"),
-      department: z.string().optional().describe("Filtrer par département (ex: 'Paris', 'Bouches-du-Rhône')"),
-      hasAffairs: z.boolean().optional().describe("Filtrer par présence d'affaires judiciaires"),
-      isActive: z.boolean().optional().describe("Filtrer les politiciens ayant un mandat actuel"),
-      page: z.number().int().min(1).default(1).describe("Numéro de page"),
-      limit: z.number().int().min(1).max(100).default(20).describe("Résultats par page (max 100)"),
+      description: "Recherche avancée de politiciens avec filtres combinés : parti, mandat, département, affaires, statut actif.",
+      inputSchema: {
+        query: z.string().optional().describe("Recherche par nom ou prénom (min 2 caractères)"),
+        party: z.string().optional().describe("Filtrer par ID de parti"),
+        mandate: z
+          .enum([
+            "DEPUTE",
+            "SENATEUR",
+            "MINISTRE",
+            "PREMIER_MINISTRE",
+            "MINISTRE_DELEGUE",
+            "SECRETAIRE_ETAT",
+            "DEPUTE_EUROPEEN",
+          ])
+          .optional()
+          .describe("Filtrer par type de mandat"),
+        department: z.string().optional().describe("Filtrer par département (ex: 'Paris', 'Bouches-du-Rhône')"),
+        hasAffairs: z.boolean().optional().describe("Filtrer par présence d'affaires judiciaires"),
+        isActive: z.boolean().optional().describe("Filtrer les politiciens ayant un mandat actuel"),
+        page: z.number().int().min(1).default(1).describe("Numéro de page"),
+        limit: z.number().int().min(1).max(100).default(20).describe("Résultats par page (max 100)"),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      _meta: {
+        "openai/toolInvocation/invoking": "Recherche avancée en cours...",
+        "openai/toolInvocation/invoked": "Résultats trouvés",
+      },
     },
     async ({ query, party, mandate, department, hasAffairs, isActive, page, limit }) => {
       const data = await fetchAPI<AdvancedSearchResponse>("/api/search/advanced", {
@@ -104,7 +111,23 @@ export function registerLegislationTools(server: McpServer): void {
         lines.push(`_Page suivante : page=${data.page + 1}_`);
       }
 
-      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+      return {
+        content: [{ type: "text" as const, text: lines.join("\n") }],
+        structuredContent: {
+          total: data.total,
+          page: data.page,
+          totalPages: data.totalPages,
+          results: data.results.map((r) => ({
+            slug: r.slug,
+            fullName: r.fullName,
+            party: r.currentParty ? { shortName: r.currentParty.shortName } : null,
+            mandate: r.currentMandate ? { type: r.currentMandate.type, constituency: r.currentMandate.constituency } : null,
+            affairsCount: r.affairsCount,
+            url: `https://poligraph.fr/politiques/${r.slug}`,
+          })),
+          suggestions: data.suggestions ?? [],
+        },
+      };
     },
   );
 }

@@ -84,7 +84,7 @@ interface PoliticianAffairsResponse {
 }
 
 const PRESUMPTION_NOTICE =
-  "⚖️ **Rappel** : Toute personne mise en examen est présumée innocente jusqu'à ce que sa culpabilité ait été établie par une décision de justice définitive.";
+  "**Rappel** : Toute personne mise en examen est présumée innocente jusqu'à ce que sa culpabilité ait été établie par une décision de justice définitive.";
 
 function formatStatus(status: string): string {
   const labels: Record<string, string> = {
@@ -175,39 +175,46 @@ function formatAffairDetail(affair: AffairListItem | PoliticianAffairsResponse["
 }
 
 export function registerAffairTools(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     "list_affairs",
-    "Lister les affaires judiciaires impliquant des politiciens français, avec filtres par statut et catégorie.",
     {
-      status: z
-        .enum([
-          "ENQUETE_PRELIMINAIRE",
-          "MISE_EN_EXAMEN",
-          "PROCES_EN_COURS",
-          "CONDAMNATION_PREMIERE_INSTANCE",
-          "CONDAMNATION_DEFINITIVE",
-          "APPEL_EN_COURS",
-          "RELAXE",
-          "NON_LIEU",
-          "PRESCRIPTION",
-        ])
-        .optional()
-        .describe("Filtrer par statut judiciaire"),
-      category: z
-        .enum([
-          "CORRUPTION",
-          "FRAUDE_FISCALE",
-          "BLANCHIMENT",
-          "TRAFIC_INFLUENCE",
-          "PRISE_ILLEGALE_INTERET",
-          "VIOLENCE",
-          "HARCELEMENT_SEXUEL",
-          "DIFFAMATION",
-        ])
-        .optional()
-        .describe("Filtrer par catégorie d'infraction"),
-      page: z.number().int().min(1).default(1).describe("Numéro de page"),
-      limit: z.number().int().min(1).max(100).default(20).describe("Résultats par page (max 100)"),
+      description: "Lister les affaires judiciaires impliquant des politiciens français, avec filtres par statut et catégorie.",
+      inputSchema: {
+        status: z
+          .enum([
+            "ENQUETE_PRELIMINAIRE",
+            "MISE_EN_EXAMEN",
+            "PROCES_EN_COURS",
+            "CONDAMNATION_PREMIERE_INSTANCE",
+            "CONDAMNATION_DEFINITIVE",
+            "APPEL_EN_COURS",
+            "RELAXE",
+            "NON_LIEU",
+            "PRESCRIPTION",
+          ])
+          .optional()
+          .describe("Filtrer par statut judiciaire"),
+        category: z
+          .enum([
+            "CORRUPTION",
+            "FRAUDE_FISCALE",
+            "BLANCHIMENT",
+            "TRAFIC_INFLUENCE",
+            "PRISE_ILLEGALE_INTERET",
+            "VIOLENCE",
+            "HARCELEMENT_SEXUEL",
+            "DIFFAMATION",
+          ])
+          .optional()
+          .describe("Filtrer par catégorie d'infraction"),
+        page: z.number().int().min(1).default(1).describe("Numéro de page"),
+        limit: z.number().int().min(1).max(100).default(20).describe("Résultats par page (max 100)"),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      _meta: {
+        "openai/toolInvocation/invoking": "Recherche d'affaires judiciaires...",
+        "openai/toolInvocation/invoked": "Affaires trouvées",
+      },
     },
     async ({ status, category, page, limit }) => {
       const data = await fetchAPI<AffairListResponse>("/api/affaires", {
@@ -235,15 +242,41 @@ export function registerAffairTools(server: McpServer): void {
         lines.push(`_Page suivante : page=${data.pagination.page + 1}_`);
       }
 
-      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+      return {
+        content: [{ type: "text" as const, text: lines.join("\n") }],
+        structuredContent: {
+          total: data.pagination.total,
+          page: data.pagination.page,
+          totalPages: data.pagination.totalPages,
+          items: data.data.map((a) => ({
+            slug: a.slug,
+            title: a.title,
+            status: a.status,
+            category: a.category,
+            politician: { slug: a.politician.slug, fullName: a.politician.fullName },
+            factsDate: a.factsDate,
+            startDate: a.startDate,
+            verdictDate: a.verdictDate,
+            sentence: a.sentence,
+            sources: a.sources.map((s) => ({ url: s.url, title: s.title, publisher: s.publisher })),
+          })),
+        },
+      };
     },
   );
 
-  server.tool(
+  server.registerTool(
     "get_politician_affairs",
-    "Obtenir les affaires judiciaires d'un politicien spécifique, avec sources et détails.",
     {
-      slug: z.string().describe("Identifiant du politicien (ex: 'nicolas-sarkozy')"),
+      description: "Obtenir les affaires judiciaires d'un politicien spécifique, avec sources et détails.",
+      inputSchema: {
+        slug: z.string().describe("Identifiant du politicien (ex: 'nicolas-sarkozy')"),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      _meta: {
+        "openai/toolInvocation/invoking": "Chargement des affaires...",
+        "openai/toolInvocation/invoked": "Affaires chargées",
+      },
     },
     async ({ slug }) => {
       const data = await fetchAPI<PoliticianAffairsResponse>(
@@ -270,9 +303,31 @@ export function registerAffairTools(server: McpServer): void {
         lines.push("");
       }
 
-      lines.push(`🔗 https://poligraph.fr/politiques/${data.politician.slug}`);
+      lines.push(`https://poligraph.fr/politiques/${data.politician.slug}`);
 
-      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+      return {
+        content: [{ type: "text" as const, text: lines.join("\n") }],
+        structuredContent: {
+          politician: {
+            slug: data.politician.slug,
+            fullName: data.politician.fullName,
+            party: data.politician.party ? { name: data.politician.party.name, shortName: data.politician.party.shortName } : null,
+          },
+          total: data.total,
+          affairs: data.affairs.map((a) => ({
+            slug: a.slug,
+            title: a.title,
+            status: a.status,
+            category: a.category,
+            factsDate: a.factsDate,
+            startDate: a.startDate,
+            verdictDate: a.verdictDate,
+            sentence: a.sentence,
+            sources: a.sources.map((s) => ({ url: s.url, title: s.title, publisher: s.publisher })),
+          })),
+          url: `https://poligraph.fr/politiques/${data.politician.slug}`,
+        },
+      };
     },
   );
 }

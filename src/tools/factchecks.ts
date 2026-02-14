@@ -119,19 +119,26 @@ function formatFactCheck(fc: FactCheckItem | PoliticianFactChecksResponse["factc
 }
 
 export function registerFactCheckTools(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     "list_factchecks",
-    "Lister les fact-checks sur des politiciens français. Sources : AFP Factuel, Les Décodeurs, etc.",
     {
-      search: z.string().optional().describe("Recherche dans le titre ou la déclaration vérifiée"),
-      politician: z.string().optional().describe("Filtrer par slug du politicien (ex: 'marine-le-pen')"),
-      source: z.string().optional().describe("Filtrer par source (ex: 'AFP Factuel', 'Les Décodeurs')"),
-      verdict: z
-        .enum(["TRUE", "MOSTLY_TRUE", "HALF_TRUE", "MISLEADING", "OUT_OF_CONTEXT", "MOSTLY_FALSE", "FALSE", "UNVERIFIABLE"])
-        .optional()
-        .describe("Filtrer par verdict : TRUE, FALSE, MISLEADING, etc."),
-      page: z.number().int().min(1).default(1).describe("Numéro de page"),
-      limit: z.number().int().min(1).max(100).default(20).describe("Résultats par page (max 100)"),
+      description: "Lister les fact-checks sur des politiciens français. Sources : AFP Factuel, Les Décodeurs, etc.",
+      inputSchema: {
+        search: z.string().optional().describe("Recherche dans le titre ou la déclaration vérifiée"),
+        politician: z.string().optional().describe("Filtrer par slug du politicien (ex: 'marine-le-pen')"),
+        source: z.string().optional().describe("Filtrer par source (ex: 'AFP Factuel', 'Les Decodeurs')"),
+        verdict: z
+          .enum(["TRUE", "MOSTLY_TRUE", "HALF_TRUE", "MISLEADING", "OUT_OF_CONTEXT", "MOSTLY_FALSE", "FALSE", "UNVERIFIABLE"])
+          .optional()
+          .describe("Filtrer par verdict : TRUE, FALSE, MISLEADING, etc."),
+        page: z.number().int().min(1).default(1).describe("Numéro de page"),
+        limit: z.number().int().min(1).max(100).default(20).describe("Résultats par page (max 100)"),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      _meta: {
+        "openai/toolInvocation/invoking": "Recherche de fact-checks...",
+        "openai/toolInvocation/invoked": "Fact-checks trouvés",
+      },
     },
     async ({ search, politician, source, verdict, page, limit }) => {
       const data = await fetchAPI<FactCheckListResponse>("/api/factchecks", {
@@ -158,17 +165,42 @@ export function registerFactCheckTools(server: McpServer): void {
         lines.push(`_Page suivante : page=${data.pagination.page + 1}_`);
       }
 
-      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+      return {
+        content: [{ type: "text" as const, text: lines.join("\n") }],
+        structuredContent: {
+          total: data.pagination.total,
+          page: data.pagination.page,
+          totalPages: data.pagination.totalPages,
+          items: data.data.map((fc) => ({
+            title: fc.title,
+            claimText: fc.claimText,
+            claimant: fc.claimant,
+            verdictRating: fc.verdictRating,
+            verdict: fc.verdict,
+            source: fc.source,
+            sourceUrl: fc.sourceUrl,
+            publishedAt: fc.publishedAt,
+            politicians: fc.politicians.map((p) => ({ slug: p.slug, fullName: p.fullName })),
+          })),
+        },
+      };
     },
   );
 
-  server.tool(
+  server.registerTool(
     "get_politician_factchecks",
-    "Obtenir les fact-checks mentionnant un politicien spécifique.",
     {
-      slug: z.string().describe("Identifiant du politicien (ex: 'marine-le-pen')"),
-      page: z.number().int().min(1).default(1).describe("Numéro de page"),
-      limit: z.number().int().min(1).max(100).default(20).describe("Résultats par page (max 100)"),
+      description: "Obtenir les fact-checks mentionnant un politicien spécifique.",
+      inputSchema: {
+        slug: z.string().describe("Identifiant du politicien (ex: 'marine-le-pen')"),
+        page: z.number().int().min(1).default(1).describe("Numéro de page"),
+        limit: z.number().int().min(1).max(100).default(20).describe("Résultats par page (max 100)"),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      _meta: {
+        "openai/toolInvocation/invoking": "Chargement des fact-checks...",
+        "openai/toolInvocation/invoked": "Fact-checks chargés",
+      },
     },
     async ({ slug, page, limit }) => {
       const data = await fetchAPI<PoliticianFactChecksResponse>(
@@ -193,9 +225,30 @@ export function registerFactCheckTools(server: McpServer): void {
         lines.push(`_Page suivante : page=${data.pagination.page + 1}_`);
       }
 
-      lines.push(`🔗 https://poligraph.fr/politiques/${data.politician.slug}`);
+      lines.push(`https://poligraph.fr/politiques/${data.politician.slug}`);
 
-      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+      return {
+        content: [{ type: "text" as const, text: lines.join("\n") }],
+        structuredContent: {
+          politician: {
+            slug: data.politician.slug,
+            fullName: data.politician.fullName,
+            party: data.politician.party ? { name: data.politician.party.name, shortName: data.politician.party.shortName } : null,
+          },
+          total: data.total,
+          factchecks: data.factchecks.map((fc) => ({
+            title: fc.title,
+            claimText: fc.claimText,
+            claimant: fc.claimant,
+            verdictRating: fc.verdictRating,
+            verdict: fc.verdict,
+            source: fc.source,
+            sourceUrl: fc.sourceUrl,
+            publishedAt: fc.publishedAt,
+          })),
+          url: `https://poligraph.fr/politiques/${data.politician.slug}`,
+        },
+      };
     },
   );
 }
