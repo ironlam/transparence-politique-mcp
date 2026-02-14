@@ -11,7 +11,7 @@ Permet aux journalistes, chercheurs et citoyens de requêter les données politi
 Le serveur est déployé sur Vercel et accessible directement :
 
 ```
-https://poligraph-mcp-ld-company.vercel.app/mcp
+https://poligraph-mcp.vercel.app/mcp
 ```
 
 #### Claude Desktop
@@ -23,7 +23,7 @@ Ajoutez dans votre fichier `claude_desktop_config.json` :
   "mcpServers": {
     "poligraph": {
       "type": "streamable-http",
-      "url": "https://poligraph-mcp-ld-company.vercel.app/mcp"
+      "url": "https://poligraph-mcp.vercel.app/mcp"
     }
   }
 }
@@ -32,7 +32,7 @@ Ajoutez dans votre fichier `claude_desktop_config.json` :
 #### Claude Code
 
 ```bash
-claude mcp add poligraph --transport http https://poligraph-mcp-ld-company.vercel.app/mcp
+claude mcp add poligraph --transport http https://poligraph-mcp.vercel.app/mcp
 ```
 
 #### ChatGPT Apps
@@ -45,7 +45,7 @@ Le serveur est compatible avec [ChatGPT Apps](https://platform.openai.com/docs/a
 2. Sélectionnez **MCP Server** comme type de connector
 3. Entrez l'URL du serveur :
    ```
-   https://poligraph-mcp-ld-company.vercel.app/mcp
+   https://poligraph-mcp.vercel.app/mcp
    ```
 4. Les 18 tools seront automatiquement détectés
 5. Publiez l'action dans votre GPT ou App
