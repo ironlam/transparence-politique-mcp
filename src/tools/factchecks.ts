@@ -2,6 +2,35 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { fetchAPI, formatDate } from "../api.js";
 
+interface FactCheckStatsResponse {
+  global: {
+    totalFactChecks: number;
+    byVerdict: Record<string, number>;
+  };
+  byParty: Array<{
+    partyId: string;
+    partyName: string;
+    partyShortName: string;
+    partyColor: string | null;
+    partySlug: string | null;
+    totalMentions: number;
+    byVerdict: Record<string, number>;
+  }>;
+  byPolitician: Array<{
+    politicianId: string;
+    fullName: string;
+    slug: string;
+    partyShortName: string | null;
+    totalMentions: number;
+    byVerdict: Record<string, number>;
+  }>;
+  bySource: Array<{
+    source: string;
+    total: number;
+    byVerdict: Record<string, number>;
+  }>;
+}
+
 interface FactCheckPolitician {
   id: string;
   slug: string;
@@ -247,6 +276,100 @@ export function registerFactCheckTools(server: McpServer): void {
             publishedAt: fc.publishedAt,
           })),
           url: `https://poligraph.fr/politiques/${data.politician.slug}`,
+        },
+      };
+    },
+  );
+
+  server.registerTool(
+    "get_factcheck_stats",
+    {
+      description:
+        "Statistiques agrégées des fact-checks : répartition par verdict, par parti politique, par source et top politiciens fact-checkés.",
+      inputSchema: {
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(50)
+          .default(15)
+          .describe("Nombre max de partis/politiciens retournés (max 50)"),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      _meta: {
+        "openai/toolInvocation/invoking": "Calcul des statistiques de fact-checks...",
+        "openai/toolInvocation/invoked": "Statistiques calculées",
+      },
+    },
+    async ({ limit }) => {
+      const data = await fetchAPI<FactCheckStatsResponse>("/api/factchecks/stats", { limit });
+
+      const lines: string[] = [];
+
+      // Global
+      lines.push(`# Statistiques Fact-checks`);
+      lines.push(`**${data.global.totalFactChecks} fact-checks** au total`);
+      lines.push("");
+      lines.push("## Répartition par verdict");
+      for (const [verdict, count] of Object.entries(data.global.byVerdict).sort((a, b) => b[1] - a[1])) {
+        lines.push(`- ${formatVerdict(verdict)} : **${count}**`);
+      }
+
+      // By party
+      if (data.byParty.length > 0) {
+        lines.push("");
+        lines.push("## Par parti politique");
+        for (const party of data.byParty) {
+          const verdicts = Object.entries(party.byVerdict)
+            .sort((a, b) => b[1] - a[1])
+            .map(([v, c]) => `${formatVerdict(v)}: ${c}`)
+            .join(", ");
+          lines.push(`- **${party.partyShortName}** (${party.partyName}) — ${party.totalMentions} mentions — ${verdicts}`);
+        }
+      }
+
+      // By politician
+      if (data.byPolitician.length > 0) {
+        lines.push("");
+        lines.push("## Top politiciens fact-checkés");
+        for (const pol of data.byPolitician) {
+          const party = pol.partyShortName ? ` (${pol.partyShortName})` : "";
+          const verdicts = Object.entries(pol.byVerdict)
+            .sort((a, b) => b[1] - a[1])
+            .map(([v, c]) => `${formatVerdict(v)}: ${c}`)
+            .join(", ");
+          lines.push(`- **${pol.fullName}**${party} — ${pol.totalMentions} mentions — ${verdicts}`);
+        }
+      }
+
+      // By source
+      if (data.bySource.length > 0) {
+        lines.push("");
+        lines.push("## Par source");
+        for (const src of data.bySource) {
+          lines.push(`- **${src.source}** : ${src.total} fact-checks`);
+        }
+      }
+
+      return {
+        content: [{ type: "text" as const, text: lines.join("\n") }],
+        structuredContent: {
+          global: data.global,
+          byParty: data.byParty.map((p) => ({
+            partyShortName: p.partyShortName,
+            partyName: p.partyName,
+            partySlug: p.partySlug,
+            totalMentions: p.totalMentions,
+            byVerdict: p.byVerdict,
+          })),
+          byPolitician: data.byPolitician.map((p) => ({
+            fullName: p.fullName,
+            slug: p.slug,
+            partyShortName: p.partyShortName,
+            totalMentions: p.totalMentions,
+            byVerdict: p.byVerdict,
+          })),
+          bySource: data.bySource,
         },
       };
     },
