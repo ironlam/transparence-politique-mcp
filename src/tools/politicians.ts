@@ -88,10 +88,14 @@ function formatPoliticianDetail(p: PoliticianDetail): string {
 
   lines.push(`# ${p.fullName}`);
   if (p.currentParty) {
-    lines.push(`**Parti** : ${p.currentParty.name} (${p.currentParty.shortName})`);
+    lines.push(
+      `**Parti** : ${p.currentParty.name} (${p.currentParty.shortName})`,
+    );
   }
   const bornLabel = p.civility === "Mme" ? "Née" : "Né";
-  lines.push(`**${bornLabel}** le ${formatDate(p.birthDate)} à ${p.birthPlace}`);
+  lines.push(
+    `**${bornLabel}** le ${formatDate(p.birthDate)} à ${p.birthPlace}`,
+  );
   if (p.deathDate) {
     lines.push(`**Décédé(e)** le ${formatDate(p.deathDate)}`);
   }
@@ -106,14 +110,18 @@ function formatPoliticianDetail(p: PoliticianDetail): string {
       lines.push("### En cours");
       for (const m of current) {
         const constituency = m.constituency ? ` — ${m.constituency}` : "";
-        lines.push(`- ${formatMandateType(m.type)} : ${m.title}${constituency} (depuis ${formatDate(m.startDate)})`);
+        lines.push(
+          `- ${formatMandateType(m.type)} : ${m.title}${constituency} (depuis ${formatDate(m.startDate)})`,
+        );
       }
     }
     if (past.length > 0) {
       lines.push("### Anciens mandats");
       for (const m of past) {
         const constituency = m.constituency ? ` — ${m.constituency}` : "";
-        lines.push(`- ${formatMandateType(m.type)} : ${m.title}${constituency} (${formatDate(m.startDate)} → ${formatDate(m.endDate)})`);
+        lines.push(
+          `- ${formatMandateType(m.type)} : ${m.title}${constituency} (${formatDate(m.startDate)} → ${formatDate(m.endDate)})`,
+        );
       }
     }
   }
@@ -129,13 +137,17 @@ function formatPoliticianDetail(p: PoliticianDetail): string {
   if (p.affairsCount > 0) {
     lines.push("");
     lines.push(`## Affaires judiciaires : ${p.affairsCount}`);
-    lines.push(`Utilisez l'outil get_politician_affairs avec le slug "${p.slug}" pour les détails.`);
+    lines.push(
+      `Utilisez l'outil get_politician_affairs avec le slug "${p.slug}" pour les détails.`,
+    );
   }
 
   if (p.factchecksCount && p.factchecksCount > 0) {
     lines.push("");
     lines.push(`## Fact-checks : ${p.factchecksCount}`);
-    lines.push(`Utilisez l'outil get_politician_factchecks avec le slug "${p.slug}" pour les détails.`);
+    lines.push(
+      `Utilisez l'outil get_politician_factchecks avec le slug "${p.slug}" pour les détails.`,
+    );
   }
 
   lines.push("");
@@ -150,35 +162,33 @@ interface RelationNode {
   fullName: string;
   photoUrl: string | null;
   party: { shortName: string; color: string | null } | null;
-  mandateType: string | null;
+  mandateType: string;
 }
 
-interface RelationLink {
-  source: string;
-  target: string;
+interface RelationCluster {
   type: string;
-  strength: number;
-  label?: string;
+  label: string;
+  nodes: RelationNode[];
+  links: Array<{
+    source: string;
+    target: string;
+    type: string;
+    label?: string;
+  }>;
 }
 
 interface RelationsResponse {
   center: RelationNode;
-  nodes: RelationNode[];
-  links: RelationLink[];
-  stats: {
-    totalConnections: number;
-    byType: Record<string, number>;
-  };
+  clusters: RelationCluster[];
+  stats: { totalConnections: number; byType: Record<string, number> };
 }
 
 function formatRelationType(type: string): string {
   const labels: Record<string, string> = {
-    SAME_PARTY: "Même parti",
     SAME_GOVERNMENT: "Même gouvernement",
-    SAME_LEGISLATURE: "Même législature",
-    SAME_CONSTITUENCY: "Même département",
-    SAME_EUROPEAN_GROUP: "Même groupe européen",
-    PARTY_HISTORY: "Ancien même parti",
+    SHARED_COMPANY: "Entreprises en commun",
+    SAME_DEPARTMENT: "Même département",
+    PARTY_HISTORY: "Anciens collègues de parti",
   };
   return labels[type] || type;
 }
@@ -187,9 +197,13 @@ export function registerPoliticianTools(server: McpServer): void {
   server.registerTool(
     "search_politicians",
     {
-      description: "Rechercher des politiciens français par nom, parti ou type de mandat. Retourne une liste paginée.",
+      description:
+        "Rechercher des politiciens français par nom, parti ou type de mandat. Retourne une liste paginée.",
       inputSchema: {
-        query: z.string().optional().describe("Recherche par nom (ex: 'Macron', 'Marine')"),
+        query: z
+          .string()
+          .optional()
+          .describe("Recherche par nom (ex: 'Macron', 'Marine')"),
         party: z.string().optional().describe("Filtrer par ID de parti"),
         mandateType: z
           .enum([
@@ -209,11 +223,24 @@ export function registerPoliticianTools(server: McpServer): void {
           ])
           .optional()
           .describe("Filtrer par type de mandat"),
-        hasAffairs: z.boolean().optional().describe("Filtrer les politiciens ayant des affaires judiciaires"),
+        hasAffairs: z
+          .boolean()
+          .optional()
+          .describe("Filtrer les politiciens ayant des affaires judiciaires"),
         page: z.number().int().min(1).default(1).describe("Numéro de page"),
-        limit: z.number().int().min(1).max(100).default(20).describe("Résultats par page (max 100)"),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(100)
+          .default(20)
+          .describe("Résultats par page (max 100)"),
       },
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
       _meta: {
         "openai/toolInvocation/invoking": "Recherche de politiciens...",
         "openai/toolInvocation/invoked": "Politiciens trouvés",
@@ -230,7 +257,9 @@ export function registerPoliticianTools(server: McpServer): void {
       });
 
       const lines: string[] = [];
-      lines.push(`**${data.pagination.total} résultats** (page ${data.pagination.page}/${data.pagination.totalPages})`);
+      lines.push(
+        `**${data.pagination.total} résultats** (page ${data.pagination.page}/${data.pagination.totalPages})`,
+      );
       lines.push("");
 
       for (const p of data.data) {
@@ -251,7 +280,12 @@ export function registerPoliticianTools(server: McpServer): void {
           items: data.data.map((p) => ({
             slug: p.slug,
             fullName: p.fullName,
-            party: p.currentParty ? { name: p.currentParty.name, shortName: p.currentParty.shortName } : null,
+            party: p.currentParty
+              ? {
+                  name: p.currentParty.name,
+                  shortName: p.currentParty.shortName,
+                }
+              : null,
             birthDate: p.birthDate,
             deathDate: p.deathDate,
             url: `https://poligraph.fr/politiques/${p.slug}`,
@@ -264,16 +298,31 @@ export function registerPoliticianTools(server: McpServer): void {
   server.registerTool(
     "get_politician_relations",
     {
-      description: "Obtenir les relations d'un politicien : même parti, gouvernement, législature, département, groupe européen.",
+      description:
+        "Obtenir les relations d'un politicien : gouvernement, entreprises en commun, département, parcours partisan.",
       inputSchema: {
-        slug: z.string().describe("Identifiant du politicien (ex: 'emmanuel-macron')"),
+        slug: z
+          .string()
+          .describe("Identifiant du politicien (ex: 'emmanuel-macron')"),
         types: z
           .string()
           .optional()
-          .describe("Types de relations séparés par virgule (ex: 'SAME_PARTY,SAME_GOVERNMENT'). Types : SAME_PARTY, SAME_GOVERNMENT, SAME_LEGISLATURE, SAME_CONSTITUENCY, SAME_EUROPEAN_GROUP, PARTY_HISTORY"),
-        limit: z.number().int().min(1).max(50).default(10).describe("Nombre max de connexions par type (max 50)"),
+          .describe(
+            "Types de relations séparés par virgule. Types : SAME_GOVERNMENT, SHARED_COMPANY, SAME_DEPARTMENT, PARTY_HISTORY",
+          ),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(50)
+          .default(10)
+          .describe("Nombre max de connexions par type (max 50)"),
       },
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
       _meta: {
         "openai/toolInvocation/invoking": "Chargement des relations...",
         "openai/toolInvocation/invoked": "Relations chargées",
@@ -286,45 +335,45 @@ export function registerPoliticianTools(server: McpServer): void {
       );
 
       const lines: string[] = [];
-      const party = data.center.party ? ` (${data.center.party.shortName})` : "";
+      const party = data.center.party
+        ? ` (${data.center.party.shortName})`
+        : "";
       lines.push(`# Relations — ${data.center.fullName}${party}`);
       lines.push(`**${data.stats.totalConnections} connexions**`);
       lines.push("");
 
-      // Group by relation type
-      const byType = new Map<string, RelationNode[]>();
-      for (const link of data.links) {
-        const node = data.nodes.find((n) => n.id === link.target);
-        if (!node) continue;
-        const existing = byType.get(link.type) || [];
-        existing.push(node);
-        byType.set(link.type, existing);
-      }
+      const relationsByType: Record<
+        string,
+        Array<{ slug: string; fullName: string; party: string | null }>
+      > = {};
 
-      for (const [type, nodes] of byType) {
-        const count = data.stats.byType[type] || nodes.length;
-        lines.push(`## ${formatRelationType(type)} (${count})`);
-        for (const n of nodes.slice(0, 15)) {
+      for (const cluster of data.clusters) {
+        const count = cluster.nodes.length;
+        lines.push(
+          `## ${cluster.label} — ${formatRelationType(cluster.type)} (${count})`,
+        );
+        for (const n of cluster.nodes.slice(0, 15)) {
           const nParty = n.party ? ` (${n.party.shortName})` : "";
-          const mandate = n.mandateType ? ` — ${formatMandateType(n.mandateType)}` : "";
+          const mandate = n.mandateType
+            ? ` — ${formatMandateType(n.mandateType)}`
+            : "";
           lines.push(`- **${n.fullName}**${nParty}${mandate}`);
         }
-        if (nodes.length > 15) {
-          lines.push(`_... et ${nodes.length - 15} autres_`);
+        if (cluster.nodes.length > 15) {
+          lines.push(`_... et ${cluster.nodes.length - 15} autres_`);
         }
         lines.push("");
-      }
 
-      lines.push(`https://poligraph.fr/politiques/${data.center.slug}/relations`);
-
-      const relationsByType: Record<string, Array<{ slug: string; fullName: string; party: string | null }>> = {};
-      for (const [type, nodes] of byType) {
-        relationsByType[type] = nodes.map((n) => ({
+        relationsByType[cluster.type] = cluster.nodes.map((n) => ({
           slug: n.slug,
           fullName: n.fullName,
           party: n.party?.shortName ?? null,
         }));
       }
+
+      lines.push(
+        `https://poligraph.fr/politiques/${data.center.slug}/relations`,
+      );
 
       return {
         content: [{ type: "text" as const, text: lines.join("\n") }],
@@ -342,20 +391,33 @@ export function registerPoliticianTools(server: McpServer): void {
   server.registerTool(
     "get_politician",
     {
-      description: "Obtenir la fiche complète d'un politicien : mandats, déclarations de patrimoine, nombre d'affaires.",
+      description:
+        "Obtenir la fiche complète d'un politicien : mandats, déclarations de patrimoine, nombre d'affaires.",
       inputSchema: {
-        slug: z.string().describe("Identifiant du politicien (ex: 'emmanuel-macron', 'marine-le-pen')"),
+        slug: z
+          .string()
+          .describe(
+            "Identifiant du politicien (ex: 'emmanuel-macron', 'marine-le-pen')",
+          ),
       },
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
       _meta: {
         "openai/toolInvocation/invoking": "Chargement du politicien...",
         "openai/toolInvocation/invoked": "Politicien chargé",
       },
     },
     async ({ slug }) => {
-      const data = await fetchAPI<PoliticianDetail>(`/api/politiques/${encodeURIComponent(slug)}`);
+      const data = await fetchAPI<PoliticianDetail>(
+        `/api/politiques/${encodeURIComponent(slug)}`,
+      );
       return {
-        content: [{ type: "text" as const, text: formatPoliticianDetail(data) }],
+        content: [
+          { type: "text" as const, text: formatPoliticianDetail(data) },
+        ],
         structuredContent: {
           slug: data.slug,
           fullName: data.fullName,
@@ -364,7 +426,12 @@ export function registerPoliticianTools(server: McpServer): void {
           deathDate: data.deathDate,
           birthPlace: data.birthPlace,
           photoUrl: data.photoUrl,
-          party: data.currentParty ? { name: data.currentParty.name, shortName: data.currentParty.shortName } : null,
+          party: data.currentParty
+            ? {
+                name: data.currentParty.name,
+                shortName: data.currentParty.shortName,
+              }
+            : null,
           mandates: data.mandates.map((m) => ({
             type: m.type,
             title: m.title,
@@ -374,7 +441,11 @@ export function registerPoliticianTools(server: McpServer): void {
             endDate: m.endDate,
             isCurrent: m.isCurrent,
           })),
-          declarations: data.declarations.map((d) => ({ type: d.type, year: d.year, url: d.url })),
+          declarations: data.declarations.map((d) => ({
+            type: d.type,
+            year: d.year,
+            url: d.url,
+          })),
           affairsCount: data.affairsCount,
           factchecksCount: data.factchecksCount ?? 0,
           url: `https://poligraph.fr/politiques/${data.slug}`,
